@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>legalAR — Consulta Orientativa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  :root{
+    --ink:#1B2A4A; --paper:#F7F4ED; --gold:#B08D57; --slate:#5B6472;
+    --line:#D8D2C2; --alert:#B5483D; --alertbg:#FBF2EF; --ok:#4A7856; --okbg:#EAF2EC;
+    --card:#fff; --text:#262F40;
+  }
+  [data-theme="dark"]{
+    --ink:#E9E6DC; --paper:#10141F; --gold:#D7B27B; --slate:#9098A3;
+    --line:#2A3142; --alertbg:#2B1B19; --okbg:#16241B; --card:#181E2C; --text:#E3E0D6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--text);font-family:'Inter',sans-serif;transition:background .3s;}
+  .serif{font-family:'Source Serif 4',serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  textarea:focus,button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  a{color:var(--ink);}
+  #loading{position:fixed;inset:0;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:14px;}
+  .scale-svg{animation:balanceo 1.6s ease-in-out infinite;transform-origin:50% 20%;}
+  @keyframes balanceo{0%,100%{transform:rotate(-9deg);}50%{transform:rotate(9deg);}}
+  @media (prefers-reduced-motion: reduce){.scale-svg{animation:none;}}
+  header{border-bottom:2px solid var(--ink);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .btn-outline{display:flex;align-items:center;gap:6px;background:transparent;border:1.5px solid var(--ink);border-radius:6px;padding:8px 14px;cursor:pointer;color:var(--ink);font-weight:600;font-size:13px;}
+  .warn-banner{margin:20px 24px 0;border:2px solid var(--alert);border-radius:4px;padding:14px 16px;display:flex;gap:12px;background:var(--alertbg);}
+  main{padding:20px 24px 60px;max-width:860px;margin:0 auto;}
+  textarea{width:100%;border:1.5px solid var(--ink);border-radius:8px;padding:14px 16px;font-size:15px;line-height:1.5;resize:vertical;font-family:'Inter',sans-serif;background:var(--card);color:var(--text);}
+  .mic-btn{position:absolute;bottom:12px;right:12px;width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--ink);color:#fff;}
+  .mic-btn.listening{background:var(--alert);animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(181,72,61,.5);}50%{box-shadow:0 0 0 8px rgba(181,72,61,0);}}
+  .btn-main{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;border-radius:6px;padding:10px 20px;font-weight:600;font-size:14px;cursor:pointer;}
+  .btn-main:disabled{background:#B7BCC4;cursor:default;}
+  .card{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr;}}
+  .tab{padding:10px 18px;border:none;background:transparent;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--slate);border-bottom:3px solid transparent;margin-bottom:-2px;}
+  .tab.active{color:var(--ink);border-bottom:3px solid var(--gold);}
+  .auth-box{max-width:380px;margin:80px auto;padding:28px;border:1.5px solid var(--ink);border-radius:10px;background:var(--card);}
+  .auth-box input{width:100%;padding:10px 12px;margin-bottom:10px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:var(--paper);color:var(--text);}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:500;}
+  .modal{background:var(--card);border-radius:10px;padding:24px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;}
+  .hist-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);}
+  .icon-btn{background:none;border:none;cursor:pointer;padding:6px;color:var(--slate);}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <svg class="scale-svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#1B2A4A" stroke-width="1.6">
+    <path d="M16 11l3 7H13l3-7zM8 11l3 7H5l3-7zM12 3v18M3 7h18M12 3l-4 4M12 3l4 4"/>
+  </svg>
+  <span class="mono" style="font-size:11px;color:#5B6472;letter-spacing:.05em;">CARGANDO LEGALAR...</span>
+</div>
+
+<div id="auth-screen" style="display:none;">
+  <div class="auth-box">
+    <h2 class="serif" style="margin:0 0 4px;">legalAR</h2>
+    <p class="mono" style="font-size:11px;color:var(--slate);margin:0 0 18px;">ACCESO PROFESIONAL</p>
+    <input id="auth-email" type="email" placeholder="Email" />
+    <input id="auth-pass" type="password" placeholder="Contraseña" />
+    <button class="btn-main" style="width:100%;justify-content:center;margin-bottom:8px;" onclick="loginUsuario()">Ingresar</button>
+    <button class="btn-outline" style="width:100%;justify-content:center;" onclick="registrarUsuario()">Crear cuenta</button>
+    <p id="auth-error" style="color:var(--alert);font-size:12.5px;margin-top:10px;"></p>
+  </div>
+</div>
+
+<div id="app-screen" style="display:none;">
+  <header>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1B2A4A" stroke-width="1.75"><path d="M16 11l3 7H13l3-7zM8 11l3 7H5l3-7zM12 3v18M3 7h18M12 3l-4 4M12 3l4 4"/></svg>
+      <div>
+        <h1 class="serif" style="margin:0;font-size:22px;font-weight:700;">legalAR</h1>
+        <p class="mono" style="margin:0;font-size:11px;color:var(--slate);letter-spacing:.04em;">LEGISLACIÓN ARGENTINA</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="btn-outline" onclick="toggleDark()" id="dark-toggle">🌙</button>
+      <button class="btn-outline" onclick="abrirHistorial()">🕓 Historial</button>
+      <button class="btn-outline" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <div class="warn-banner">
+    <span style="color:var(--alert);">⚠️</span>
+    <p style="margin:0;font-size:13.5px;line-height:1.5;color:var(--alert);">
+      <strong>Esta herramienta no sustituye a un abogado.</strong> Es información orientativa para uso profesional propio.
+    </p>
+  </div>
+
+  <main>
+    <label class="mono" style="font-size:11px;color:var(--slate);letter-spacing:.04em;display:block;margin-bottom:8px;">DESCRIBÍ LA SITUACIÓN</label>
+
+    <div id="loading-consulta" style="display:none;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px;">
+      <svg class="scale-svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1B2A4A" stroke-width="1.5"><path d="M16 11l3 7H13l3-7zM8 11l3 7H5l3-7zM12 3v18M3 7h18M12 3l-4 4M12 3l4 4"/></svg>
+      <span class="mono" style="font-size:11px;color:var(--slate);">Analizando la consulta...</span>
+    </div>
+
+    <div style="position:relative;">
+      <textarea id="consulta-input" rows="5" placeholder="Ej: Un cliente me consulta porque le rescindieron el contrato de locación antes de tiempo..."></textarea>
+      <button class="mic-btn" id="mic-btn" onclick="toggleMic()">🎤</button>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+      <button class="btn-main" id="btn-consultar" onclick="enviarConsulta()">➤ Consultar</button>
+    </div>
+    <p id="error-msg" style="color:var(--alert);font-size:13px;margin-top:10px;"></p>
+
+    <div id="resultado" style="margin-top:32px;display:none;"></div>
+  </main>
+</div>
+
+<div id="historial-modal" class="modal-bg" style="display:none;" onclick="if(event.target===this)cerrarHistorial()">
+  <div class="modal">
+    <h3 class="serif" style="margin-top:0;">Historial</h3>
+    <input id="busqueda-input" placeholder="Buscar por palabra clave o tema..." style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:var(--paper);color:var(--text);" oninput="renderHistorial()" />
+    <div id="historial-lista"></div>
+  </div>
+</div>
+
+
+
+<script>
+// ============ CONFIGURACIÓN ============
+const firebaseConfig = {
+  apiKey: "AIzaSyA8OTufri4hI_wjh5KefownuJuZ9QydMMk",
+  authDomain: "legalar.firebaseapp.com",
+  projectId: "legalar",
+  storageBucket: "legalar.firebasestorage.app",
+  messagingSenderId: "340858674664",
+  appId: "1:340858674664:web:39a0fc7e823587440c585d"
+};
+const NETLIFY_FUNCTION_URL = "/.netlify/functions/consultaLegal";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+let currentUser = null;
+let resultadoActual = null;
+let historialCache = [];
+
+function storageKey(){ return "legalar-historial-" + (currentUser ? currentUser.uid : "anon"); }
+function cargarHistorialLocal(){
+  try { historialCache = JSON.parse(localStorage.getItem(storageKey()) || "[]"); }
+  catch(e){ historialCache = []; }
+}
+function guardarHistorialLocal(){
+  localStorage.setItem(storageKey(), JSON.stringify(historialCache));
+}
+
+// ============ LOADING / THEME ============
+window.addEventListener("load", () => {
+  setTimeout(() => { document.getElementById("loading").style.display = "none"; }, 1200);
+});
+if (localStorage.getItem("legalar-theme") === "dark") {
+  document.documentElement.setAttribute("data-theme", "dark");
+}
+function toggleDark(){
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  if (isDark) { document.documentElement.removeAttribute("data-theme"); localStorage.setItem("legalar-theme","light"); }
+  else { document.documentElement.setAttribute("data-theme","dark"); localStorage.setItem("legalar-theme","dark"); }
+}
+
+// ============ AUTH ============
+auth.onAuthStateChanged(user => {
+  currentUser = user;
+  document.getElementById("loading").style.display = "none";
+  if (user) {
+    document.getElementById("auth-screen").style.display = "none";
+    document.getElementById("app-screen").style.display = "block";
+    cargarHistorialLocal();
+  } else {
+    document.getElementById("auth-screen").style.display = "flex";
+    document.getElementById("app-screen").style.display = "none";
+  }
+});
+function loginUsuario(){
+  const email = document.getElementById("auth-email").value.trim();
+  const pass = document.getElementById("auth-pass").value;
+  auth.signInWithEmailAndPassword(email, pass).catch(e => {
+    document.getElementById("auth-error").textContent = "Error: " + e.message;
+  });
+}
+function registrarUsuario(){
+  const email = document.getElementById("auth-email").value.trim();
+  const pass = document.getElementById("auth-pass").value;
+  auth.createUserWithEmailAndPassword(email, pass).catch(e => {
+    document.getElementById("auth-error").textContent = "Error: " + e.message;
+  });
+}
+function logout(){ auth.signOut(); }
+
+// ============ MICRÓFONO ============
+let recognition = null, listening = false;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  recognition = new SR();
+  recognition.lang = "es-AR";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onresult = e => {
+    const txt = e.results[0][0].transcript;
+    const ta = document.getElementById("consulta-input");
+    ta.value = ta.value ? ta.value + " " + txt : txt;
+  };
+  recognition.onend = () => { listening = false; document.getElementById("mic-btn").classList.remove("listening"); };
+}
+function toggleMic(){
+  if (!recognition) return;
+  if (listening) { recognition.stop(); listening = false; document.getElementById("mic-btn").classList.remove("listening"); }
+  else { recognition.start(); listening = true; document.getElementById("mic-btn").classList.add("listening"); }
+}
+
+// ============ CONSULTA A LA IA (vía Cloud Function) ============
+async function enviarConsulta(){
+  const texto = document.getElementById("consulta-input").value.trim();
+  if (!texto) return;
+  document.getElementById("error-msg").textContent = "";
+  document.getElementById("loading-consulta").style.display = "flex";
+  document.getElementById("btn-consultar").disabled = true;
+  document.getElementById("resultado").style.display = "none";
+  try {
+    const idToken = await currentUser.getIdToken();
+    const resp = await fetch(NETLIFY_FUNCTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + idToken },
+      body: JSON.stringify({ consulta: texto })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || ("Error " + resp.status));
+    resultadoActual = data;
+    pintarResultado(data, texto);
+  } catch(e) {
+    document.getElementById("error-msg").textContent = "No se pudo procesar la consulta. Detalle: " + e.message;
+  } finally {
+    document.getElementById("loading-consulta").style.display = "none";
+    document.getElementById("btn-consultar").disabled = false;
+  }
+}
+
+function pintarResultado(r, consultaTexto){
+  const el = document.getElementById("resultado");
+  el.style.display = "block";
+  el.dataset.guardado = "false";
+  el.innerHTML = `
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <h2 class="serif" style="font-size:19px;font-weight:700;margin:0;">${r.tema || ""}</h2>
+      <button class="btn-outline" id="btn-guardar" onclick="guardarConsultaActual('${escapeAttr(consultaTexto)}')">💾 Guardar consulta</button>
+    </div>
+    <div style="display:flex;border-bottom:2px solid var(--ink);margin-bottom:18px;">
+      <button class="tab active" id="tab-tecnica" onclick="cambiarTab('tecnica')">Lenguaje técnico</button>
+      <button class="tab" id="tab-simple" onclick="cambiarTab('simple')">Palabras simples</button>
+    </div>
+    <p id="texto-respuesta" class="serif" style="font-size:15.5px;line-height:1.7;margin-bottom:28px;">${r.respuesta_tecnica || ""}</p>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="mono" style="font-size:11.5px;letter-spacing:.04em;color:var(--slate);margin:0 0 10px;">📄 CASO DE REFERENCIA</h3>
+        <p style="font-size:13.5px;line-height:1.6;margin:0;">${r.caso_referencia || ""}</p>
+        ${r.caso_referencia_url ? `<a href="${r.caso_referencia_url}" target="_blank" style="display:inline-block;margin-top:10px;font-size:12.5px;font-weight:600;text-decoration:underline;">Ver fuente 🔗</a>` : ""}
+      </div>
+      <div class="card">
+        <h3 class="mono" style="font-size:11.5px;letter-spacing:.04em;color:var(--slate);margin:0 0 10px;">📚 BIBLIOGRAFÍA</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.7;">
+          ${(r.bibliografia||[]).map(b => {
+            const texto = typeof b === "string" ? b : b.texto;
+            const url = typeof b === "string" ? null : b.url;
+            return `<li>${texto}${url ? ` <a href="${url}" target="_blank">🔗</a>` : ""}</li>`;
+          }).join("")}
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3 class="mono" style="font-size:11.5px;letter-spacing:.04em;color:var(--slate);margin:0 0 10px;">⛓ DIAGRAMA DEL PROCESO</h3>
+      ${r.diagrama_mermaid ? `<div id="mermaid-box" style="overflow-x:auto;display:flex;justify-content:center;"></div>` : `<p style="font-size:13px;color:var(--slate);font-style:italic;margin:0;">${r.diagrama_nota || "Este caso no tiene un flujo lineal claro."}</p>`}
+    </div>
+    <div style="margin-top:20px;padding:12px 16px;background:var(--alertbg);border-left:3px solid var(--alert);border-radius:4px;">
+      <p style="margin:0;font-size:12.5px;color:var(--alert);line-height:1.5;">${r.advertencia || ""}</p>
+    </div>
+  `;
+  window.__tabData = r;
+  if (r.diagrama_mermaid && window.mermaid) {
+    mermaid.initialize({ startOnLoad:false, theme: document.documentElement.getAttribute("data-theme")==="dark"?"dark":"neutral" });
+    mermaid.render("mmd-"+Date.now(), r.diagrama_mermaid).then(({svg}) => {
+      document.getElementById("mermaid-box").innerHTML = svg;
+    }).catch(()=>{});
+  }
+}
+function cambiarTab(tab){
+  document.getElementById("tab-tecnica").classList.toggle("active", tab==="tecnica");
+  document.getElementById("tab-simple").classList.toggle("active", tab==="simple");
+  document.getElementById("texto-respuesta").textContent = tab==="tecnica" ? window.__tabData.respuesta_tecnica : window.__tabData.respuesta_simple;
+}
+function escapeAttr(s){ return (s||"").replace(/'/g,"\\'"); }
+
+// ============ GUARDAR (CREATE) ============
+function guardarConsultaActual(consultaTexto){
+  if (!resultadoActual) return;
+  historialCache.unshift({
+    id: "c" + Date.now(),
+    consulta: consultaTexto,
+    resultado: resultadoActual,
+    nota: "",
+    creado: new Date().toISOString()
+  });
+  guardarHistorialLocal();
+  const btn = document.getElementById("btn-guardar");
+  if (btn) { btn.textContent = "✓ Guardada"; btn.disabled = true; }
+}
+
+// ============ HISTORIAL (READ / UPDATE / DELETE) ============
+function abrirHistorial(){
+  document.getElementById("historial-modal").style.display = "flex";
+  cargarHistorialLocal();
+  renderHistorial();
+}
+function cerrarHistorial(){ document.getElementById("historial-modal").style.display = "none"; }
+function renderHistorial(){
+  const q = document.getElementById("busqueda-input").value.toLowerCase();
+  const filtrado = historialCache.filter(h =>
+    !q || (h.resultado?.tema||"").toLowerCase().includes(q) || (h.consulta||"").toLowerCase().includes(q)
+  );
+  const cont = document.getElementById("historial-lista");
+  if (!filtrado.length) { cont.innerHTML = "<p style='font-size:13px;color:var(--slate);'>No hay consultas guardadas en este teléfono.</p>"; return; }
+  cont.innerHTML = filtrado.map(h => `
+    <div class="hist-row">
+      <div style="flex:1;cursor:pointer;" onclick="cargarItem('${h.id}')">
+        <div style="font-size:13px;font-weight:600;">${h.resultado?.tema || "Consulta"}</div>
+        <div style="font-size:11.5px;color:var(--slate);">${new Date(h.creado).toLocaleString("es-AR")}</div>
+      </div>
+      <button class="icon-btn" onclick="editarNota('${h.id}')" title="Editar nota">✏️</button>
+      <button class="icon-btn" onclick="borrarItem('${h.id}')" title="Eliminar">🗑️</button>
+    </div>
+  `).join("");
+}
+function cargarItem(id){
+  const item = historialCache.find(h => h.id === id);
+  if (!item) return;
+  document.getElementById("consulta-input").value = item.consulta;
+  resultadoActual = item.resultado;
+  pintarResultado(item.resultado, item.consulta);
+  document.getElementById("btn-guardar").textContent = "✓ Guardada";
+  document.getElementById("btn-guardar").disabled = true;
+  cerrarHistorial();
+}
+function editarNota(id){
+  const item = historialCache.find(h => h.id === id);
+  const nueva = prompt("Nota personal para esta consulta:", item.nota || "");
+  if (nueva === null) return;
+  item.nota = nueva;
+  guardarHistorialLocal();
+}
+function borrarItem(id){
+  if (!confirm("¿Eliminar esta consulta del historial?")) return;
+  historialCache = historialCache.filter(h => h.id !== id);
+  guardarHistorialLocal();
+  renderHistorial();
+}
+</script>
+</body>
+</html>
