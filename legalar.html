@@ -105,8 +105,8 @@
     </div>
 
     <div style="position:relative;">
-      <textarea id="consulta-input" rows="5" placeholder="Ej: Un cliente me consulta porque le rescindieron el contrato de locación antes de tiempo..."></textarea>
-      <button class="mic-btn" id="mic-btn" onclick="toggleMic()">🎤</button>
+      <textarea id="consulta-input" rows="5" placeholder="Ej: Un cliente me consulta porque le rescindieron el contrato de locación antes de tiempo..." aria-label="Describí la situación legal a consultar"></textarea>
+      <button class="mic-btn" id="mic-btn" onclick="toggleMic()" aria-label="Dictar la consulta por voz" aria-pressed="false">🎤</button>
     </div>
 
     <div style="display:flex;justify-content:flex-end;margin-top:10px;">
@@ -210,12 +210,12 @@ if (SR) {
     const ta = document.getElementById("consulta-input");
     ta.value = ta.value ? ta.value + " " + txt : txt;
   };
-  recognition.onend = () => { listening = false; document.getElementById("mic-btn").classList.remove("listening"); };
+  recognition.onend = () => { listening = false; document.getElementById("mic-btn").classList.remove("listening"); document.getElementById("mic-btn").setAttribute("aria-pressed","false"); };
 }
 function toggleMic(){
   if (!recognition) return;
-  if (listening) { recognition.stop(); listening = false; document.getElementById("mic-btn").classList.remove("listening"); }
-  else { recognition.start(); listening = true; document.getElementById("mic-btn").classList.add("listening"); }
+  if (listening) { recognition.stop(); listening = false; document.getElementById("mic-btn").classList.remove("listening"); document.getElementById("mic-btn").setAttribute("aria-pressed","false"); }
+  else { recognition.start(); listening = true; document.getElementById("mic-btn").classList.add("listening"); document.getElementById("mic-btn").setAttribute("aria-pressed","true"); }
 }
 
 // ============ CONSULTA A LA IA (vía Cloud Function) ============
@@ -245,6 +245,40 @@ async function enviarConsulta(){
   }
 }
 
+function copiarResultado(){
+  if (!resultadoActual) return;
+  const r = resultadoActual;
+  const partes = [
+    `Tema: ${r.tema || ""}`,
+    "",
+    "— Lenguaje técnico —",
+    r.respuesta_tecnica || "",
+    "",
+    "— Palabras simples —",
+    r.respuesta_simple || "",
+    "",
+    "— Caso de referencia —",
+    r.caso_referencia || "",
+    r.caso_referencia_url ? `Fuente: ${r.caso_referencia_url}` : "",
+    "",
+    "— Bibliografía —",
+    ...(r.bibliografia || []).map(b => {
+      const texto = typeof b === "string" ? b : b.texto;
+      const url = typeof b === "string" ? null : b.url;
+      return url ? `${texto} (${url})` : texto;
+    }),
+    "",
+    r.advertencia || ""
+  ].filter(Boolean).join("\n");
+
+  const btn = document.getElementById("btn-copiar");
+  navigator.clipboard?.writeText(partes).then(() => {
+    if (btn) { const original = btn.textContent; btn.textContent = "✓ Copiado"; setTimeout(() => { btn.textContent = original; }, 2000); }
+  }).catch(() => {
+    document.getElementById("error-msg").textContent = "No se pudo copiar el resultado.";
+  });
+}
+
 function pintarResultado(r, consultaTexto){
   const el = document.getElementById("resultado");
   el.style.display = "block";
@@ -252,7 +286,10 @@ function pintarResultado(r, consultaTexto){
   el.innerHTML = `
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <h2 class="serif" style="font-size:19px;font-weight:700;margin:0;">${r.tema || ""}</h2>
-      <button class="btn-outline" id="btn-guardar" onclick="guardarConsultaActual('${escapeAttr(consultaTexto)}')">💾 Guardar consulta</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-outline" id="btn-copiar" onclick="copiarResultado()" aria-label="Copiar el resultado de la consulta al portapapeles">📋 Copiar</button>
+        <button class="btn-outline" id="btn-guardar" onclick="guardarConsultaActual('${escapeAttr(consultaTexto)}')" aria-label="Guardar esta consulta en el historial">💾 Guardar consulta</button>
+      </div>
     </div>
     <div style="display:flex;border-bottom:2px solid var(--ink);margin-bottom:18px;">
       <button class="tab active" id="tab-tecnica" onclick="cambiarTab('tecnica')">Lenguaje técnico</button>
