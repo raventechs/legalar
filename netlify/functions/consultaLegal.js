@@ -1,12 +1,5 @@
-const admin = require("firebase-admin");
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(
-      JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, "base64").toString("utf8"))
-    ),
-  });
-}
+// consultaLegal.js — legalAR v2.1
+// Verificación de token via Firebase REST API (sin firebase-admin ni Service Account)
 
 const SYSTEM_PROMPT = `Sos un asistente de orientación legal basado EXCLUSIVAMENTE en legislación de la República Argentina (Código Civil y Comercial, Código Penal, leyes nacionales, jurisprudencia de tribunales argentinos, etc).
 
@@ -41,10 +34,20 @@ exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
 
   try {
+    // Verificar token con Firebase REST API (sin firebase-admin)
     const authHeader = event.headers.authorization || event.headers.Authorization || "";
     const idToken = authHeader.replace("Bearer ", "");
     if (!idToken) return { statusCode: 401, headers, body: JSON.stringify({ error: "Falta token de autenticación" }) };
-    await admin.auth().verifyIdToken(idToken);
+
+    const verifyRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_WEB_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    if (!verifyRes.ok) return { statusCode: 401, headers, body: JSON.stringify({ error: "Token inválido" }) };
 
     const body = JSON.parse(event.body || "{}");
     const consulta = (body.consulta || "").trim();
@@ -67,7 +70,7 @@ exports.handler = async (event) => {
 
     const data = await response.json();
     if (!response.ok) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: "Error del API de Anthropic: " + JSON.stringify(data).slice(0, 300) }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: "Error del API: " + JSON.stringify(data).slice(0, 300) }) };
     }
 
     const raw = data.content.map((b) => b.text || "").join("\n");
@@ -82,4 +85,3 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message || "Error desconocido" }) };
   }
 };
-
