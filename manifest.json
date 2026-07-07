@@ -2,14 +2,14 @@
   "name": "legalAR",
   "short_name": "legalAR",
   "description": "Consulta legal orientativa basada en legislación argentina",
-  "start_url": "/legalar/legalar.html",
-  "scope": "/legalar/",
+  "start_url": "/legalar.html",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0D1117",
   "theme_color": "#0D1117",
   "orientation": "portrait",
   "icons": [
-    { "src": "/legalar/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/legalar/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
