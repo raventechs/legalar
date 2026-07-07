@@ -616,6 +616,7 @@ document.getElementById('btn-google').addEventListener('click', async () => {
   const btn = document.getElementById('btn-google');
   btn.disabled = true; btn.textContent = 'Conectando...';
   try {
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     const provider = new firebase.auth.GoogleAuthProvider();
     await auth.signInWithPopup(provider);
   } catch(e) {
@@ -1106,7 +1107,8 @@ document.getElementById('btn-backup').addEventListener('click', hacerBackup);
 
 // ── SW ────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/legalar/sw-legalar.js').catch(e => console.warn('SW:', e));
+  // Registrar SW sin bloquear — path relativo para funcionar en cualquier dominio
+  navigator.serviceWorker.register('./sw-legalar.js').catch(e => console.warn('SW:', e));
 }
 </script>
 </body>
