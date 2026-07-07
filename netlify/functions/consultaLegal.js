@@ -39,6 +39,7 @@ exports.handler = async (event) => {
     const idToken = authHeader.replace("Bearer ", "");
     if (!idToken) return { statusCode: 401, headers, body: JSON.stringify({ error: "Falta token de autenticación" }) };
 
+    // Verificar token con Firebase REST — endpoint correcto
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_WEB_API_KEY}`,
       {
@@ -47,7 +48,11 @@ exports.handler = async (event) => {
         body: JSON.stringify({ idToken }),
       }
     );
-    if (!verifyRes.ok) return { statusCode: 401, headers, body: JSON.stringify({ error: "Token inválido" }) };
+    const verifyData = await verifyRes.json();
+    if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
+      console.error("Token verify error:", JSON.stringify(verifyData));
+      return { statusCode: 401, headers, body: JSON.stringify({ error: "Token inválido", detail: JSON.stringify(verifyData) }) };
+    }
 
     const body = JSON.parse(event.body || "{}");
     const consulta = (body.consulta || "").trim();
