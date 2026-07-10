@@ -973,6 +973,8 @@ async function enviarConsulta() {
   document.getElementById('resultado-content').classList.remove('on');
   document.getElementById('loading-consulta').classList.add('on');
   document.getElementById('btn-consultar').disabled = true;
+  document.getElementById('libroLoader').classList.add('on');
+  document.getElementById('panel-resultado').style.visibility = 'hidden';
 
   try {
     const idToken = await me.getIdToken();
@@ -992,6 +994,8 @@ async function enviarConsulta() {
   } finally {
     document.getElementById('loading-consulta').classList.remove('on');
     document.getElementById('btn-consultar').disabled = false;
+  document.getElementById('libroLoader').classList.remove('on');
+  document.getElementById('panel-resultado').style.visibility = '';
   }
 }
 
