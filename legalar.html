@@ -1,8 +1,17 @@
 <!DOCTYPE html>
 <!--
   ════════════════════════════════════════════════════════════
-  LEGALAR — v2.0
-  Fecha: 2026-07-07
+  LEGALAR — v2.1
+  Fecha: 2026-07-13
+  NUEVO:
+  - Portal Cliente: el profesional crea causas con estado y
+    comparte un link único con el cliente para ver el estado
+    sin llamar al estudio. Solo visible en modo Profesional + PLUS.
+  - Facturación por horas/módulos: registro de tiempo trabajado
+    por causa, generación de honorario en base a tarifa/hora.
+    Solo visible en modo Profesional + PLUS.
+  ─────────────────────────────────────────────────────────────
+  ESTADO ANTERIOR v2.0 (2026-07-07):
   Rediseño completo: modos Profesional/Ciudadano, historial PLUS
   con carpetas + notas + exportar PDF, backup automático + manual,
   Google login + email/contraseña, SW offline, P1-P5 robustez.
@@ -416,6 +425,34 @@ textarea.consulta::placeholder{color:var(--muted2)}
       <div class="resultado-content" id="resultado-content"></div>
     </div>
   </div>
+
+  <!-- ═══ NAV PROFESIONAL PLUS ═══ -->
+  <div id="pro-nav" style="display:none;background:var(--surface);border-top:1px solid var(--border);padding:0 16px;overflow-x:auto;white-space:nowrap;">
+    <button class="pro-nav-btn active" data-pronav="consulta">⚖️ Consultas</button>
+    <button class="pro-nav-btn" data-pronav="causas">📁 Causas / Portal</button>
+    <button class="pro-nav-btn" data-pronav="honorarios">⏱ Honorarios</button>
+  </div>
+
+  <!-- ═══ SECCIÓN CAUSAS / PORTAL CLIENTE ═══ -->
+  <div id="sec-causas" class="pro-section" style="display:none;padding:16px;max-width:680px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:700;">📁 Causas</div>
+      <button class="btn-primary" id="btn-nueva-causa" style="padding:8px 16px;font-size:13px;">＋ Nueva causa</button>
+    </div>
+    <input type="text" id="search-causas" placeholder="Buscar causa o cliente..." style="width:100%;background:var(--bg);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;margin-bottom:12px;">
+    <div id="causas-list"></div>
+  </div>
+
+  <!-- ═══ SECCIÓN HONORARIOS ═══ -->
+  <div id="sec-honorarios" class="pro-section" style="display:none;padding:16px;max-width:680px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-family:var(--font-display);font-size:18px;font-weight:700;">⏱ Honorarios</div>
+      <button class="btn-primary" id="btn-nuevo-registro" style="padding:8px 16px;font-size:13px;">＋ Registrar tiempo</button>
+    </div>
+    <div id="honorarios-resumen" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;"></div>
+    <input type="text" id="search-honorarios" placeholder="Buscar por causa o cliente..." style="width:100%;background:var(--bg);border:1.5px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;margin-bottom:12px;">
+    <div id="honorarios-list"></div>
+  </div>
 </div>
 
 <!-- ADMIN -->
@@ -450,6 +487,55 @@ textarea.consulta::placeholder{color:var(--muted2)}
       <button class="pin-btn" data-n="ok" style="background:var(--gold);color:#0D1117;border-color:var(--gold);font-size:14px;font-weight:700">OK</button>
     </div>
     <div class="pin-err" id="pin-err"></div>
+  </div>
+</div>
+
+<!-- MODAL NUEVA/EDITAR CAUSA -->
+<div class="modal-overlay" id="modal-causa">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><span class="modal-title" id="modal-causa-title">Nueva Causa</span><button class="modal-close-btn" id="close-causa">✕</button></div>
+    <input type="hidden" id="causa-id"/>
+    <div class="form-group"><label>Carátula / Nombre</label><input type="text" id="causa-caratula" placeholder="Ej: García c/ Municipalidad"/></div>
+    <div class="form-group"><label>Cliente</label><input type="text" id="causa-cliente" placeholder="Nombre del cliente"/></div>
+    <div class="form-group"><label>Fuero / Juzgado</label><input type="text" id="causa-juzgado" placeholder="Ej: Juzgado Civil N°5"/></div>
+    <div class="form-group"><label>Estado</label>
+      <select id="causa-estado">
+        <option value="iniciada">📋 Iniciada</option>
+        <option value="en_tramite">⚙️ En trámite</option>
+        <option value="con_sentencia">⚖️ Con sentencia</option>
+        <option value="apelacion">📤 En apelación</option>
+        <option value="finalizada">✅ Finalizada</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notas internas</label><textarea id="causa-notas" rows="3" placeholder="Notas visibles solo para vos..." style="resize:vertical"></textarea></div>
+    <div class="form-group"><label>Mensaje al cliente</label><textarea id="causa-mensaje" rows="2" placeholder="Texto que verá el cliente en el portal..." style="resize:vertical"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-causa">Cancelar</button>
+      <button class="btn-primary" id="save-causa">Guardar causa</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO REGISTRO HONORARIO -->
+<div class="modal-overlay" id="modal-honorario">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><span class="modal-title" id="modal-hon-title">Registrar tiempo</span><button class="modal-close-btn" id="close-honorario">✕</button></div>
+    <input type="hidden" id="hon-id"/>
+    <div class="form-group"><label>Causa / Expediente</label><input type="text" id="hon-causa" placeholder="Carátula o referencia"/></div>
+    <div class="form-group"><label>Cliente</label><input type="text" id="hon-cliente" placeholder="Nombre del cliente"/></div>
+    <div class="form-group"><label>Descripción de la tarea</label><textarea id="hon-desc" rows="2" placeholder="Ej: Redacción de escrito de demanda..." style="resize:vertical"></textarea></div>
+    <div class="form-group" style="display:flex;gap:12px;">
+      <div style="flex:1"><label>Horas</label><input type="number" id="hon-horas" min="0" step="0.5" value="1" placeholder="0"/></div>
+      <div style="flex:1"><label>Tarifa por hora ($)</label><input type="number" id="hon-tarifa" min="0" placeholder="Ej: 5000"/></div>
+    </div>
+    <div class="form-group"><label>Fecha</label><input type="date" id="hon-fecha"/></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;font-size:14px;">
+      Total: <strong id="hon-total-preview">$0</strong>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-honorario">Cancelar</button>
+      <button class="btn-primary" id="save-honorario">Guardar</button>
+    </div>
   </div>
 </div>
 
@@ -677,6 +763,10 @@ auth.onAuthStateChanged(async user => {
     showScreen('screen-app');
     await cargarHistorial();
     renderHistorial();
+    if (userDoc?.modo === 'profesional' && tienePlus()) {
+      await Promise.all([cargarCausas(), cargarHonorarios()]);
+      initProNav();
+    }
     backupAutomatico();
   } else {
     me = null; userDoc = null; historial = [];
@@ -704,6 +794,10 @@ document.getElementById('btn-guardar-modo').addEventListener('click', async () =
     showScreen('screen-app');
     await cargarHistorial();
     renderHistorial();
+    if (userDoc?.modo === 'profesional' && tienePlus()) {
+      await Promise.all([cargarCausas(), cargarHonorarios()]);
+      initProNav();
+    }
     backupAutomatico();
   } catch(e) { toast('Error al guardar el modo', 'err'); logError('guardarModo', e); }
   btn.disabled = false; btn.textContent = 'Continuar →';
@@ -1128,6 +1222,250 @@ function hacerBackup() {
 }
 
 document.getElementById('btn-backup').addEventListener('click', hacerBackup);
+
+/* ═══════════════════════════════════════════════
+   ESTILOS SECCIONES PRO
+═══════════════════════════════════════════════ */
+const styleEl = document.createElement('style');
+styleEl.textContent = `
+  .pro-nav-btn { background:transparent; border:none; color:var(--muted); padding:12px 16px; font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; display:inline-block; }
+  .pro-nav-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
+  .causa-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; transition:border-color .2s; }
+  .causa-card:hover { border-color:var(--gold); }
+  .causa-estado-badge { display:inline-block; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:700; }
+  .hon-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
+  .hon-resumen-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .form-group { margin-bottom:12px; }
+  .form-group label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; background:var(--bg); border:1.5px solid var(--border); color:var(--text); border-radius:8px; padding:8px 12px; font-size:14px; outline:none; font-family:inherit; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:var(--gold); }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .modal-title { font-family:var(--font-display); font-size:18px; font-weight:700; }
+  .modal-close-btn { background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer; }
+  .modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+`;
+document.head.appendChild(styleEl);
+
+/* ═══════════════════════════════════════════════
+   PRO NAV — activar solo en modo Profesional + PLUS
+═══════════════════════════════════════════════ */
+function initProNav() {
+  if (userDoc?.modo !== 'profesional' || !tienePlus()) return;
+  document.getElementById('pro-nav').style.display = 'block';
+  document.querySelectorAll('.pro-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pro-nav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.pronav;
+      document.querySelector('.app-body').style.display = target === 'consulta' ? '' : 'none';
+      document.getElementById('sec-causas').style.display = target === 'causas' ? 'block' : 'none';
+      document.getElementById('sec-honorarios').style.display = target === 'honorarios' ? 'block' : 'none';
+      if (target === 'causas') renderCausas();
+      if (target === 'honorarios') renderHonorarios();
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   CAUSAS / PORTAL CLIENTE
+═══════════════════════════════════════════════ */
+let causas = {};
+let causaEditandoId = null;
+const estadoCausaLabel = { iniciada:'📋 Iniciada', en_tramite:'⚙️ En trámite', con_sentencia:'⚖️ Con sentencia', apelacion:'📤 En apelación', finalizada:'✅ Finalizada' };
+const estadoCausaColor = { iniciada:'#6b7a99', en_tramite:'#1d4ed8', con_sentencia:'#d97706', apelacion:'#7c3aed', finalizada:'#16a34a' };
+
+async function cargarCausas() {
+  try {
+    const snap = await db.collection('causas').where('uid', '==', me.uid).get();
+    causas = {};
+    snap.forEach(d => { causas[d.id] = { id: d.id, ...d.data() }; });
+  } catch(e) { logError('cargarCausas', e); }
+}
+
+function renderCausas() {
+  const q = (document.getElementById('search-causas')?.value || '').toLowerCase();
+  let lista = Object.values(causas);
+  if (q) lista = lista.filter(c => (c.caratula||'').toLowerCase().includes(q) || (c.cliente||'').toLowerCase().includes(q));
+  lista.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+  const el = document.getElementById('causas-list');
+  el.innerHTML = lista.length === 0
+    ? '<div style="text-align:center;color:var(--muted);padding:24px;">Sin causas registradas. Tocá + para agregar.</div>'
+    : lista.map(c => {
+        const token = c.portalToken || '';
+        const url = token ? `${location.origin}${location.pathname.replace('legalar.html','')}portal.html?c=${token}` : '';
+        return `<div class="causa-card" data-causaid="${c.id}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+            <div style="font-weight:700;font-size:15px;">${c.caratula||'Sin carátula'}</div>
+            <span class="causa-estado-badge" style="background:${estadoCausaColor[c.estado]||'#6b7a99'}22;color:${estadoCausaColor[c.estado]||'#6b7a99'}">${estadoCausaLabel[c.estado]||c.estado}</span>
+          </div>
+          <div style="font-size:13px;color:var(--muted);">👤 ${c.cliente||''} ${c.juzgado?'· '+c.juzgado:''}</div>
+          ${c.mensaje?`<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic;">"${c.mensaje}"</div>`:''}
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <button class="btn-sm" onclick="editarCausa('${c.id}');event.stopPropagation();">✏️ Editar</button>
+            <button class="btn-sm" onclick="compartirPortal('${c.id}');event.stopPropagation();">🔗 Link portal</button>
+            <button class="btn-sm danger" onclick="eliminarCausa('${c.id}');event.stopPropagation();">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+}
+
+function abrirModalCausa(causa = null) {
+  causaEditandoId = causa?.id || null;
+  document.getElementById('modal-causa-title').textContent = causa ? 'Editar Causa' : 'Nueva Causa';
+  document.getElementById('causa-id').value = causa?.id || '';
+  document.getElementById('causa-caratula').value = causa?.caratula || '';
+  document.getElementById('causa-cliente').value = causa?.cliente || '';
+  document.getElementById('causa-juzgado').value = causa?.juzgado || '';
+  document.getElementById('causa-estado').value = causa?.estado || 'iniciada';
+  document.getElementById('causa-notas').value = causa?.notas || '';
+  document.getElementById('causa-mensaje').value = causa?.mensaje || '';
+  document.getElementById('modal-causa').classList.add('active');
+}
+window.editarCausa = (id) => abrirModalCausa(causas[id]);
+window.eliminarCausa = async (id) => {
+  if (!confirm('¿Eliminar esta causa?')) return;
+  try { await db.collection('causas').doc(id).delete(); delete causas[id]; renderCausas(); toast('Causa eliminada'); } catch(e) { toast('Error al eliminar'); }
+};
+window.compartirPortal = async (id) => {
+  let c = causas[id];
+  if (!c.portalToken) {
+    const token = Math.random().toString(36).substring(2, 14) + Date.now().toString(36);
+    try {
+      await db.collection('causas').doc(id).update({ portalToken: token });
+      causas[id].portalToken = token;
+      c = causas[id];
+    } catch(e) { toast('Error generando link'); return; }
+  }
+  const url = `${location.origin}${location.pathname.replace('legalar.html','')}portal-causa.html?c=${c.portalToken}`;
+  const txt = `Estado de tu causa "${c.caratula}":\n${url}`;
+  if (navigator.share) { navigator.share({ title: 'Estado de causa', text: txt, url }); }
+  else { navigator.clipboard.writeText(url).then(() => toast('Link copiado ✅', 'ok')); }
+};
+
+document.getElementById('btn-nueva-causa').addEventListener('click', () => abrirModalCausa());
+document.getElementById('close-causa').addEventListener('click', () => document.getElementById('modal-causa').classList.remove('active'));
+document.getElementById('cancel-causa').addEventListener('click', () => document.getElementById('modal-causa').classList.remove('active'));
+document.getElementById('search-causas').addEventListener('input', renderCausas);
+
+document.getElementById('save-causa').addEventListener('click', async () => {
+  const caratula = document.getElementById('causa-caratula').value.trim();
+  if (!caratula) { toast('La carátula es obligatoria', 'err'); return; }
+  const id = document.getElementById('causa-id').value;
+  const data = {
+    caratula, uid: me.uid,
+    cliente: document.getElementById('causa-cliente').value.trim(),
+    juzgado: document.getElementById('causa-juzgado').value.trim(),
+    estado: document.getElementById('causa-estado').value,
+    notas: document.getElementById('causa-notas').value.trim(),
+    mensaje: document.getElementById('causa-mensaje').value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  const btn = document.getElementById('save-causa'); btn.disabled = true;
+  try {
+    if (id) { await db.collection('causas').doc(id).update(data); causas[id] = { ...causas[id], ...data }; }
+    else { const ref = await db.collection('causas').add({ ...data, portalToken: null, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); causas[ref.id] = { id: ref.id, ...data, portalToken: null }; }
+    document.getElementById('modal-causa').classList.remove('active');
+    toast('Causa guardada ✅', 'ok'); renderCausas();
+  } catch(e) { toast('Error al guardar', 'err'); logError('saveCausa', e); }
+  btn.disabled = false;
+});
+
+/* ═══════════════════════════════════════════════
+   HONORARIOS POR HORAS
+═══════════════════════════════════════════════ */
+let honorarios = {};
+
+async function cargarHonorarios() {
+  try {
+    const snap = await db.collection('honorarios').where('uid', '==', me.uid).get();
+    honorarios = {};
+    snap.forEach(d => { honorarios[d.id] = { id: d.id, ...d.data() }; });
+  } catch(e) { logError('cargarHonorarios', e); }
+}
+
+function renderHonorarios() {
+  const q = (document.getElementById('search-honorarios')?.value || '').toLowerCase();
+  let lista = Object.values(honorarios);
+  if (q) lista = lista.filter(h => (h.causa||'').toLowerCase().includes(q) || (h.cliente||'').toLowerCase().includes(q));
+  lista.sort((a, b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+  const totalGeneral = lista.reduce((s, h) => s + (h.total || 0), 0);
+  const totalHoras = lista.reduce((s, h) => s + (parseFloat(h.horas) || 0), 0);
+  document.getElementById('honorarios-resumen').innerHTML = `
+    <div class="hon-resumen-card"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">TOTAL HONORARIOS</div><div style="font-size:22px;font-weight:800;color:var(--gold);">$${totalGeneral.toLocaleString('es-AR')}</div></div>
+    <div class="hon-resumen-card"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">HORAS REGISTRADAS</div><div style="font-size:22px;font-weight:800;">${totalHoras.toLocaleString('es-AR')} hs</div></div>
+  `;
+
+  const el = document.getElementById('honorarios-list');
+  el.innerHTML = lista.length === 0
+    ? '<div style="text-align:center;color:var(--muted);padding:24px;">Sin registros. Tocá + para agregar tiempo.</div>'
+    : lista.map(h => `
+      <div class="hon-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-weight:700;">${h.causa||'Sin causa'}</div>
+            <div style="font-size:12px;color:var(--muted);">👤 ${h.cliente||''} · ${h.fecha||''}</div>
+            ${h.desc?`<div style="font-size:13px;margin-top:4px;">${h.desc}</div>`:''}
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">${h.horas} hs × $${(h.tarifa||0).toLocaleString('es-AR')}/h</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+            <div style="font-size:18px;font-weight:800;color:var(--gold);">$${(h.total||0).toLocaleString('es-AR')}</div>
+            <button class="btn-sm danger" style="margin-top:6px;font-size:11px;" onclick="eliminarHonorario('${h.id}')">🗑</button>
+          </div>
+        </div>
+      </div>`).join('');
+}
+
+function calcHonTotal() {
+  const h = parseFloat(document.getElementById('hon-horas').value) || 0;
+  const t = parseFloat(document.getElementById('hon-tarifa').value) || 0;
+  document.getElementById('hon-total-preview').textContent = '$' + (h * t).toLocaleString('es-AR');
+}
+
+window.eliminarHonorario = async (id) => {
+  if (!confirm('¿Eliminar este registro?')) return;
+  try { await db.collection('honorarios').doc(id).delete(); delete honorarios[id]; renderHonorarios(); toast('Registro eliminado'); } catch(e) { toast('Error al eliminar'); }
+};
+
+document.getElementById('btn-nuevo-registro').addEventListener('click', () => {
+  document.getElementById('hon-id').value = '';
+  document.getElementById('hon-causa').value = '';
+  document.getElementById('hon-cliente').value = '';
+  document.getElementById('hon-desc').value = '';
+  document.getElementById('hon-horas').value = '1';
+  document.getElementById('hon-tarifa').value = '';
+  document.getElementById('hon-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('hon-total-preview').textContent = '$0';
+  document.getElementById('modal-honorario').classList.add('active');
+});
+document.getElementById('close-honorario').addEventListener('click', () => document.getElementById('modal-honorario').classList.remove('active'));
+document.getElementById('cancel-honorario').addEventListener('click', () => document.getElementById('modal-honorario').classList.remove('active'));
+document.getElementById('hon-horas').addEventListener('input', calcHonTotal);
+document.getElementById('hon-tarifa').addEventListener('input', calcHonTotal);
+document.getElementById('search-honorarios').addEventListener('input', renderHonorarios);
+
+document.getElementById('save-honorario').addEventListener('click', async () => {
+  const causa = document.getElementById('hon-causa').value.trim();
+  const horas = parseFloat(document.getElementById('hon-horas').value) || 0;
+  const tarifa = parseFloat(document.getElementById('hon-tarifa').value) || 0;
+  if (!causa || horas <= 0) { toast('Completá causa y horas', 'err'); return; }
+  const data = {
+    causa, uid: me.uid,
+    cliente: document.getElementById('hon-cliente').value.trim(),
+    desc: document.getElementById('hon-desc').value.trim(),
+    horas, tarifa, total: horas * tarifa,
+    fecha: document.getElementById('hon-fecha').value,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  const btn = document.getElementById('save-honorario'); btn.disabled = true;
+  try {
+    const ref = await db.collection('honorarios').add(data);
+    honorarios[ref.id] = { id: ref.id, ...data };
+    document.getElementById('modal-honorario').classList.remove('active');
+    toast('Registro guardado ✅', 'ok'); renderHonorarios();
+  } catch(e) { toast('Error al guardar', 'err'); logError('saveHonorario', e); }
+  btn.disabled = false;
+});
 
 // ── SW ────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
