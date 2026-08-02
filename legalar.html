@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ════════════════════════════════════════════════════════════
-  LEGALAR — v2.1
+  LEGALAR — v2.2 — 2026-08-01 — Seguridad: sanitizar() anti-XSS (resultado de consultas, causas, honorarios, historial), App Check SDK preparado
   Fecha: 2026-07-13
   NUEVO:
   - Portal Cliente: el profesional crea causas con estado y
@@ -28,6 +28,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-check-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
@@ -595,8 +596,22 @@ const ADMIN_EMAIL = "rgaraventa@gmail.com";
 const DEMO_MS     = 24 * 60 * 60 * 1000;
 
 firebase.initializeApp(FB_CONFIG);
+var APPCHECK_KEY = '';
+if (APPCHECK_KEY && typeof firebase.appCheck === 'function') {
+  firebase.appCheck().activate(
+    new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_KEY), true);
+}
 const auth = firebase.auth();
 const db   = firebase.firestore();
+
+function sanitizar(txt) {
+  return String(txt || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ── ESTADO ────────────────────────────────────────────────
 let me = null, userDoc = null;
@@ -830,7 +845,7 @@ async function loadAdminUsers() {
       }
       if (u.features?.plus) badge += '<span class="badge badge-plus">PLUS</span>';
       return `<div class="admin-card">
-        <div class="admin-card-title">${u.email||d.id}${ban?'<span class="badge" style="background:var(--alert-bg);color:var(--alert)">BANEADO</span>':''} ${badge}</div>
+        <div class="admin-card-title">${sanitizar(u.email||d.id)}${ban?'<span class="badge" style="background:var(--alert-bg);color:var(--alert)">BANEADO</span>':''} ${badge}</div>
         <div class="admin-card-sub">Modo: ${u.modo||'—'} | ${u.createdAt?.toDate?.().toLocaleDateString('es-AR')||'—'}</div>
         <div class="admin-actions">
           ${ban
@@ -921,16 +936,16 @@ function renderHistorial() {
     </div>
     <input class="hist-search" id="hist-search" placeholder="Buscar por tema o nota…"/>
     <div class="hist-carpetas">
-      ${carpetas.map(c => `<div class="hist-carpeta-chip${carpetaActiva===c?' active':''}" data-c="${c}">${c||'Todas'}</div>`).join('')}
+      ${carpetas.map(c => `<div class="hist-carpeta-chip${carpetaActiva===c?' active':''}" data-c="${sanitizar(c)}">${sanitizar(c)||'Todas'}</div>`).join('')}
     </div>
     <div id="hist-lista">
       ${filtrado.length === 0
         ? '<p style="font-size:13px;color:var(--muted2)">Sin consultas guardadas.</p>'
         : filtrado.map(h => `
           <div class="hist-item" data-id="${h.id}">
-            <div class="hist-item-tema">${h.resultado?.tema || 'Consulta'}</div>
-            <div class="hist-item-fecha">${fmtFecha(h.creado)}${h.carpeta ? ' · ' + h.carpeta : ''}</div>
-            ${h.nota ? `<div class="hist-item-nota">${h.nota}</div>` : ''}
+            <div class="hist-item-tema">${sanitizar(h.resultado?.tema) || 'Consulta'}</div>
+            <div class="hist-item-fecha">${fmtFecha(h.creado)}${h.carpeta ? ' · ' + sanitizar(h.carpeta) : ''}</div>
+            ${h.nota ? `<div class="hist-item-nota">${sanitizar(h.nota)}</div>` : ''}
             <div class="hist-item-actions">
               <div class="hist-action-btn btn-hist-edit" data-id="${h.id}" title="Editar nota">✏️</div>
               <div class="hist-action-btn btn-hist-del" data-id="${h.id}" title="Eliminar">🗑️</div>
@@ -1102,7 +1117,7 @@ function pintarResultado(r) {
   const el = document.getElementById('resultado-content');
   el.innerHTML = `
     <div class="resultado-header">
-      <div class="resultado-tema">${r.tema || ''}</div>
+      <div class="resultado-tema">${sanitizar(r.tema)||''}</div>
       <div class="resultado-actions">
         <button class="btn-sm" id="btn-copiar">📋 Copiar</button>
         ${tienePlus() ? `<button class="btn-sm" id="btn-guardar-hist">💾 Guardar</button>` : ''}
@@ -1112,11 +1127,11 @@ function pintarResultado(r) {
       <button class="tab active" data-tab="a">${tabA}</button>
       <button class="tab" data-tab="b">${tabB}</button>
     </div>
-    <p class="resp-text" id="resp-text">${textoDefault || ''}</p>
+    <p class="resp-text" id="resp-text">${sanitizar(textoDefault)||''}</p>
     <div class="grid2">
       <div class="card">
         <span class="card-label">📄 Caso de referencia</span>
-        <p class="card-text">${r.caso_referencia || '—'}</p>
+        <p class="card-text">${sanitizar(r.caso_referencia)||'—'}</p>
         ${r.caso_referencia_url ? `<a href="${r.caso_referencia_url}" target="_blank" rel="noopener">Ver fuente 🔗</a>` : ''}
       </div>
       <div class="card">
@@ -1125,7 +1140,7 @@ function pintarResultado(r) {
           ${(r.bibliografia||[]).map(b => {
             const txt = typeof b === 'string' ? b : b.texto;
             const url = typeof b === 'string' ? null : b.url;
-            return `<li>${txt}${url ? ` <a href="${url}" target="_blank">🔗</a>` : ''}</li>`;
+            return `<li>${sanitizar(txt)}${url ? ` <a href="${url}" target="_blank">🔗</a>` : ''}</li>`;
           }).join('')}
         </ul>
       </div>
@@ -1134,9 +1149,9 @@ function pintarResultado(r) {
       <span class="card-label">⛓ Diagrama del proceso</span>
       ${r.diagrama_mermaid
         ? `<div class="diagrama-wrap" id="diagrama-wrap"></div>`
-        : `<p class="card-text">${r.diagrama_nota || 'Este caso no tiene un flujo lineal claro.'}</p>`}
+        : `<p class="card-text">${sanitizar(r.diagrama_nota)||'Este caso no tiene un flujo lineal claro.'}</p>`}
     </div>
-    <div class="advertencia">${r.advertencia || ''}</div>`;
+    <div class="advertencia">${sanitizar(r.advertencia)||''}</div>`;
 
   el.classList.add('on');
 
@@ -1295,11 +1310,11 @@ function renderCausas() {
         const url = token ? `${location.origin}${location.pathname.replace('legalar.html','')}portal.html?c=${token}` : '';
         return `<div class="causa-card" data-causaid="${c.id}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-            <div style="font-weight:700;font-size:15px;">${c.caratula||'Sin carátula'}</div>
+            <div style="font-weight:700;font-size:15px;">${sanitizar(c.caratula)||'Sin carátula'}</div>
             <span class="causa-estado-badge" style="background:${estadoCausaColor[c.estado]||'#6b7a99'}22;color:${estadoCausaColor[c.estado]||'#6b7a99'}">${estadoCausaLabel[c.estado]||c.estado}</span>
           </div>
-          <div style="font-size:13px;color:var(--muted);">👤 ${c.cliente||''} ${c.juzgado?'· '+c.juzgado:''}</div>
-          ${c.mensaje?`<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic;">"${c.mensaje}"</div>`:''}
+          <div style="font-size:13px;color:var(--muted);">👤 ${sanitizar(c.cliente)||''} ${c.juzgado?'· '+sanitizar(c.juzgado):''}</div>
+          ${c.mensaje?`<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic;">"${sanitizar(c.mensaje)}"</div>`:''}
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
             <button class="btn-sm" onclick="editarCausa('${c.id}');event.stopPropagation();">✏️ Editar</button>
             <button class="btn-sm" onclick="compartirPortal('${c.id}');event.stopPropagation();">🔗 Link portal</button>
@@ -1403,9 +1418,9 @@ function renderHonorarios() {
       <div class="hon-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <div style="font-weight:700;">${h.causa||'Sin causa'}</div>
-            <div style="font-size:12px;color:var(--muted);">👤 ${h.cliente||''} · ${h.fecha||''}</div>
-            ${h.desc?`<div style="font-size:13px;margin-top:4px;">${h.desc}</div>`:''}
+            <div style="font-weight:700;">${sanitizar(h.causa)||'Sin causa'}</div>
+            <div style="font-size:12px;color:var(--muted);">👤 ${sanitizar(h.cliente)||''} · ${h.fecha||''}</div>
+            ${h.desc?`<div style="font-size:13px;margin-top:4px;">${sanitizar(h.desc)}</div>`:''}
             <div style="font-size:12px;color:var(--muted);margin-top:4px;">${h.horas} hs × $${(h.tarifa||0).toLocaleString('es-AR')}/h</div>
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:12px;">
