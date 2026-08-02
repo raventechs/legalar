@@ -1,5 +1,17 @@
 <!DOCTYPE html>
 <html><head>
+<meta name="theme-color" content="#2C3E50">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LegalAR">
+<link rel="manifest" href="manifest.json">
 <meta charset="UTF-8">
 <meta http-equiv="refresh" content="0;url=legalar.html">
-</head><body></body></html>
+</head><body><script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(e){console.log('SW:',e);});
+  });
+}
+</script>
+</body></html>
