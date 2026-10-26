@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <!--
   ════════════════════════════════════════════════════════════
-  LEGALAR — v2.1
-  Fecha: 2026-07-13
+  LEGALAR — v2.2
+  Fecha: 2026-10-26
+  v2.2: BACKUP completo: ahora incluye causas (con su link de portal) y honorarios, que antes quedaban afuera; se agrega RESTAURAR (📤), copia local de los últimos 7 días y el automático corre una vez por día aunque el historial esté vacío. Corrige el nombre del CSV de historial (salía como .json).
   NUEVO:
   - Portal Cliente: el profesional crea causas con estado y
     comparte un link único con el cliente para ver el estado
@@ -381,7 +382,9 @@ textarea.consulta::placeholder{color:var(--muted2)}
       <span class="modo-badge" id="modo-badge">PROFESIONAL</span>
     </div>
     <div class="header-right">
-      <button class="icon-btn" id="btn-backup" title="Backup manual">💾</button>
+      <button class="icon-btn" id="btn-backup" title="Descargar backup ahora">💾</button>
+      <button class="icon-btn" id="btn-restaurar" title="Restaurar desde un archivo de backup">📤</button>
+      <input type="file" id="inputRestaurarBackup" accept=".json,application/json" style="display:none">
       <button class="icon-btn" id="btn-logout" title="Cerrar sesión">⏻</button>
     </div>
   </div>
@@ -1197,31 +1200,122 @@ function exportarCSV() {
   const csv = rows.map(r => r.map(x => `"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = `legalar-historial-${hoyStr()}.json`;
+  a.download = `legalar-historial-${hoyStr()}.csv`;
   a.click();
   toast('CSV exportado ✅', 'ok');
 }
 
 // ── BACKUP ────────────────────────────────────────────────
-async function backupAutomatico() {
-  const KEY = 'legalar-backup-' + hoyStr();
-  if (localStorage.getItem(KEY)) return;
-  if (!historial.length) return;
-  hacerBackup();
-  localStorage.setItem(KEY, '1');
+// ══════════ BACKUP ESTÁNDAR 2.2 ══════════
+// Automático una vez por día al entrar (baja un JSON y deja copia en IndexedDB), manual (💾) y restaurar (📤).
+// Incluye TODO lo del usuario: historial de consultas (carpetas y notas), causas con su link de portal y honorarios.
+// Son datos profesionales y de clientes: el archivo queda en tu dispositivo, guardalo en un lugar seguro.
+function _bkHoy() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-
-function hacerBackup() {
-  const data = { app: 'legalAR', fecha: new Date().toISOString(), uid: me?.uid, historial };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+function _bkSer(v) {
+  if (v && typeof v === 'object') {
+    if (typeof v.toMillis === 'function' && 'seconds' in v && 'nanoseconds' in v) return { __ts: [v.seconds, v.nanoseconds] };
+    if (Array.isArray(v)) return v.map(_bkSer);
+    const o = {}; Object.keys(v).forEach(k => { o[k] = _bkSer(v[k]); }); return o;
+  }
+  return v;
+}
+function _bkRev(v) {
+  if (v && typeof v === 'object') {
+    if (Array.isArray(v)) return v.map(_bkRev);
+    if (Array.isArray(v.__ts) && v.__ts.length === 2) return new firebase.firestore.Timestamp(v.__ts[0], v.__ts[1]);
+    const o = {}; Object.keys(v).forEach(k => { o[k] = _bkRev(v[k]); }); return o;
+  }
+  return v;
+}
+async function _bkLeer(ref) {
+  const s = await ref.get();
+  return s.docs.map(d => Object.assign({ _id: d.id }, _bkSer(d.data())));
+}
+function _bkIdb(fecha, json) {
+  return new Promise(function (res) {
+    try {
+      const rq = indexedDB.open('legalar-backup', 1);
+      rq.onupgradeneeded = function () { rq.result.createObjectStore('b', { keyPath: 'fecha' }); };
+      rq.onsuccess = function () {
+        const idb = rq.result, tx = idb.transaction('b', 'readwrite'), st = tx.objectStore('b');
+        st.put({ fecha: fecha, json: json });
+        st.getAllKeys().onsuccess = function (e) { const ks = e.target.result.sort(); while (ks.length > 7) st.delete(ks.shift()); };
+        tx.oncomplete = function () { idb.close(); res(true); };
+        tx.onerror = tx.onabort = function () { idb.close(); res(false); };
+      };
+      rq.onerror = function () { res(false); };
+    } catch (e) { res(false); }
+  });
+}
+function _bkDescargar(json, fecha) {
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `legalar-backup-${hoyStr()}.json`;
-  a.click();
-  toast('Backup descargado ✅', 'ok');
+  a.href = url; a.download = 'legalar-backup-' + fecha + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+}
+async function _bkCommit(ops) {
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    ops.slice(i, i + 400).forEach(function (o) { if (o[2]) batch.set(o[0], o[1], { merge: true }); else batch.set(o[0], o[1]); });
+    await batch.commit();
+  }
 }
 
-document.getElementById('btn-backup').addEventListener('click', hacerBackup);
+function _bkPuede() { return !!(me && me.uid); }
+async function generarBackup(silencioso) {
+  if (!_bkPuede()) { if (!silencioso) toast('Iniciá sesión primero', 'err'); return; }
+  try {
+    const uid = me.uid;
+    const hist = await _bkLeer(db.collection('usuarios').doc(uid).collection('historial'));
+    const caus = await _bkLeer(db.collection('causas').where('uid', '==', uid));
+    const hons = await _bkLeer(db.collection('honorarios').where('uid', '==', uid));
+    if (silencioso && !hist.length && !caus.length && !hons.length) return;     // nada que respaldar
+    const fecha = _bkHoy();
+    const json = JSON.stringify({ app: 'legalAR', version: '2.2', fecha: new Date().toISOString(), uid: uid, modo: (userDoc && userDoc.modo) || null, historial: hist, causas: caus, honorarios: hons });
+    _bkDescargar(json, fecha);
+    await _bkIdb(fecha, json);
+    try { localStorage.setItem('legalar-ultimo-backup', fecha); } catch (e) {}
+    if (!silencioso) toast('Backup descargado ✅', 'ok');
+  } catch (e) { console.warn('generarBackup', e); if (!silencioso) toast('Error al generar backup: ' + (e.code || e.message), 'err'); }
+}
+async function restaurarBackup(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    if (!_bkPuede()) { toast('Iniciá sesión primero', 'err'); return; }
+    const bk = JSON.parse(await file.text());
+    if (bk.app !== 'legalAR' || !Array.isArray(bk.historial)) { toast('El archivo no es un backup de legalAR', 'err'); return; }
+    const uid = me.uid, uref = db.collection('usuarios').doc(uid), ops = [];
+    bk.historial.forEach(function (d) { const r = Object.assign({}, d), id = r._id || r.id; delete r._id; delete r.id; if (id) ops.push([uref.collection('historial').doc(id), _bkRev(r)]); });
+    // causas y honorarios siempre quedan a nombre de la cuenta que restaura; los backups viejos (v2.1) no los traían
+    (bk.causas || []).forEach(function (d) { const r = Object.assign({}, d), id = r._id; delete r._id; if (id) { r.uid = uid; ops.push([db.collection('causas').doc(id), _bkRev(r)]); } });
+    (bk.honorarios || []).forEach(function (d) { const r = Object.assign({}, d), id = r._id; delete r._id; if (id) { r.uid = uid; ops.push([db.collection('honorarios').doc(id), _bkRev(r)]); } });
+    if (!ops.length) { toast('El backup no tiene datos', 'err'); return; }
+    if (!confirm('Se van a volver a cargar ' + ops.length + ' registros (historial, causas y honorarios) en tu cuenta. Lo que ya existe se reemplaza por lo del archivo; el resto queda como está. ¿Continuar?')) return;
+    toast('Restaurando…');
+    await _bkCommit(ops);
+    toast('Backup restaurado ✅ (' + ops.length + ' registros)', 'ok');
+    setTimeout(function () { location.reload(); }, 1500);
+  } catch (e) { console.warn('restaurarBackup', e); toast('Error al restaurar: ' + (e.code || e.message), 'err'); }
+  finally { input.value = ''; }
+}
+function chequearBackupDiario() {
+  if (!_bkPuede()) return;
+  let ultimo = null; try { ultimo = localStorage.getItem('legalar-ultimo-backup'); } catch (e) {}
+  if (ultimo !== _bkHoy()) setTimeout(function () { generarBackup(true); }, 6000);
+}
+function backupAutomatico() { chequearBackupDiario(); }
+window.generarBackup = generarBackup; window.restaurarBackup = restaurarBackup;
+// ══════════ FIN BACKUP ══════════
+
+document.getElementById('btn-backup').addEventListener('click', function () { generarBackup(false); });
+document.getElementById('btn-restaurar').addEventListener('click', function () { document.getElementById('inputRestaurarBackup').click(); });
+document.getElementById('inputRestaurarBackup').addEventListener('change', function () { restaurarBackup(this); });
 
 /* ═══════════════════════════════════════════════
    ESTILOS SECCIONES PRO
