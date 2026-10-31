@@ -951,8 +951,8 @@ async function loadAdminUsers() {
           <button class="btn-admin btn-plus" data-uid="${d.id}" data-plus="${u.features?.plus||false}">
             ${u.features?.plus ? '⭐ Quitar PLUS' : '⭐ Dar PLUS'}
           </button>
-          <input type="number" min="1" max="30" value="7" style="width:50px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text)" data-ext-uid="${d.id}"/>
-          <button class="btn-admin btn-ext" data-uid="${d.id}">⏱ Extender</button>
+          <button class="btn-admin btn-ext" data-uid="${d.id}" data-dias="7">⏱ +7 días</button>
+        <button class="btn-admin btn-ext" data-uid="${d.id}" data-dias="30">⏱ +30 días</button>
         </div>
       </div>`;
     }).join('');
@@ -984,7 +984,7 @@ document.getElementById('admin-users-list').addEventListener('click', async e =>
       toast(`PLUS ${!actual ? 'activado' : 'desactivado'}`); await loadAdminUsers();
     }
     if (ext) {
-      const dias = parseInt(document.querySelector(`input[data-ext-uid="${ext.dataset.uid}"]`)?.value) || 7;
+      const dias=parseInt(ext.dataset.dias)||7;
       const snap = await db.collection('usuarios').doc(ext.dataset.uid).get();
       const u = snap.data();
       const base = u.demoExpiry?.toMillis?.() || ((u.demoStart?.toMillis?.() || Date.now()) + DEMO_MS);
