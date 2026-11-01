@@ -681,9 +681,9 @@ textarea.consulta::placeholder{color:var(--muted2)}
 <div id="demo-wall">
   <div class="demo-card">
     <div class="demo-icon">⏳</div>
-    <div class="demo-title">Tu demo terminó</div>
+    <div class="demo-title">Tu prueba gratis terminó</div>
     <div class="demo-sub">Gracias por probar legalAR. Para activar tu cuenta, contactanos.</div>
-    <a href="mailto:ventas@raventechsapp.com?subject=Quiero activar legalAR&body=Hola, probé la demo y me interesa continuar." class="btn-demo-email">✉️ Contactar por email</a>
+    <a href="https://wa.me/5491136547592?text=Hola%20RavenTechs%2C%20quiero%20activar%20mi%20cuenta%20de%20LegalAR" target="_blank" rel="noopener" class="btn-demo-email">📲 Activar mi cuenta por WhatsApp</a>
     <button class="btn-demo-logout" id="btn-demo-logout">Cerrar sesión</button>
   </div>
 </div>
@@ -703,7 +703,7 @@ const FB_CONFIG = {
 const NETLIFY_URL = "https://legalar.rgaraventa.workers.dev";
 const ADMIN_PIN   = "";
 const ADMIN_EMAIL = "rgaraventa@gmail.com";
-const DEMO_MS     = 24 * 60 * 60 * 1000;
+const DEMO_MS=14*24*60*60*1000; // prueba gratis: 14 días
 
 firebase.initializeApp(FB_CONFIG);
 const auth = firebase.auth();
@@ -919,7 +919,16 @@ function checkDemo() {
   if (!userDoc || tienePlus()) return;
   const start  = userDoc.demoStart?.toMillis?.() || 0;
   const expiry = userDoc.demoExpiry?.toMillis?.() || start + DEMO_MS;
-  if (Date.now() > expiry) document.getElementById('demo-wall').classList.add('on');
+  if (Date.now() > expiry) { document.getElementById('demo-wall').classList.add('on'); return; }
+  if (userDoc.status === 'activo') return;
+  const dias = Math.ceil((expiry - Date.now()) / 86400000);
+  if (!document.getElementById('rtDemoCartel')) {
+    const b = document.createElement('a'); b.id = 'rtDemoCartel'; b.target = '_blank';
+    b.href = 'https://wa.me/5491136547592?text=' + encodeURIComponent('Hola RavenTechs, quiero activar mi cuenta de LegalAR');
+    b.textContent = '🎓 Prueba gratis: ' + (dias === 1 ? 'te queda 1 día' : 'te quedan ' + dias + ' días') + ' · Activar mi cuenta';
+    b.style.cssText = 'position:fixed;top:calc(env(safe-area-inset-top,0px) + 6px);left:50%;transform:translateX(-50%);z-index:9000;padding:5px 14px;border-radius:99px;font:600 12px system-ui,sans-serif;text-decoration:none;color:#fff;white-space:nowrap;background:' + (dias <= 3 ? '#dc2626' : '#2563eb');
+    document.body.appendChild(b);
+  }
 }
 
 // ── ADMIN ─────────────────────────────────────────────────
