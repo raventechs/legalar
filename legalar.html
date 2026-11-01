@@ -760,10 +760,8 @@ document.getElementById('app-logo').addEventListener('click', () => {
 });
 
 // ── PIN ───────────────────────────────────────────────────
-function abrirPin() {
-  pinBuf = ''; updDots();
-  document.getElementById('pin-err').textContent = '';
-  document.getElementById('pin-overlay').classList.add('on');
+function abrirPin() { /* sin PIN: abre directo solo con la cuenta admin */
+  if (window.rtIsAdmin && window.rtIsAdmin()) { showScreen('screen-admin'); loadAdminUsers(); }
 }
 function cerrarPin() { document.getElementById('pin-overlay').classList.remove('on'); }
 function updDots() {
